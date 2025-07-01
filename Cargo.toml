@@ -1,0 +1,13 @@
+[package]
+name = "genetics"
+version = "0.1.0"
+authors = ["Gabriel <gabriel@iamgabrielsoft.com>"]
+license = "MIT"
+readme = "README.md"
+repository = "https://github.com/iamgabrielsoft/genetics"
+keywords = ["static-site-generator", "ssg", "static-site", "site-generator"]
+edition = "2024"
+
+[dependencies]
+clap = { version = "4", features = ["derive"] }
+anyhow = "1.0.56"
