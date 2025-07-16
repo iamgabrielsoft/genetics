@@ -13,6 +13,10 @@ pub enum Command {
         /// force project creation
         #[clap(short = 'f', long)]
         force: bool,
+
+        /// Open site in the default browser
+        #[clap(short = 'O', long)]
+        open: bool,
     },
 
 
@@ -31,9 +35,13 @@ pub enum Command {
 
         port: u16,
         
-        output_dir: PathBuf,
+        output_dir: Option<PathBuf>,
 
-        base_url: String,
+        base_url: Option<String>,
+
+        /// Open site in the default browser
+        #[clap(short = 'O', long)]
+        open: bool,
     }
 }
 

@@ -1,7 +1,11 @@
-use std::io::Write;
+use std::io::{Read, Write};
+use std::net::{IpAddr, SocketAddr};
 use std::path::{ Path, PathBuf };
-use std::fs::{ create_dir, create_dir_all, File };
-use anyhow::{Context, Ok, Result};
+use std::fs::{ create_dir_all, File };
+use anyhow::{Context, Error, Ok, Result};
+use walkdir::WalkDir;
+
+use crate::utils::site::Site;
 
 
 /// Get the current config path
@@ -44,17 +48,132 @@ pub fn create_directory(path: &Path) -> Result<()>  {
 }
 
 
-pub fn create_file(path: &Path, content: impl AsRef<str>) -> Result<()> {
-    create_parent(path)?; 
-    let mut file = 
+/// Create a file from a path
+pub fn create_file(path: &Path, content: impl AsRef<str>)  -> Result<()> {
+    create_parent(path)?;
+    let mut file =
         File::create(path).with_context(|| format!("Failed to create file {}", path.display()))?;
-    
-    file.write_all(content.as_ref().as_bytes()); 
+    file.write_all(content.as_ref().as_bytes())?;
     Ok(())
 }
 
 
+/// Get the content of a file with good error handling
+pub fn read_file(path: &Path) -> Result<String> {
+    let mut content = String::new(); 
+    File::open(path)
+        .with_context(|| format!("Failed to open file {} ", path.display()))?
+        .read_to_string(&mut content)?;
+
+    if content.starts_with('\u{feff}') {
+        content.drain(..3);
+    }
+    
+    Ok(content)
+}
+
+
+/// Copy a file to another location
+pub fn copy_file(src: &Path, dest: &Path, base_path: &Path)-> Result<()> {
+    let relative_path = src.strip_prefix(base_path).unwrap();
+    let target_path = dest.join(relative_path);
+
+    create_parent(&target_path)?;
+
+    Ok(())
+}
+
+
+/// Copy a directory to another location
+pub fn copy_directory(src: &Path, dest: &Path) -> Result<()>{
+    for entry in WalkDir::new(src).follow_links(true).into_iter().filter_map(std::result::Result::ok) {
+        let relative_path = entry.path().strip_prefix(src).unwrap(); 
+
+        let target_path = dest.join(relative_path); 
+
+
+        if entry.path().is_dir() {
+            if !target_path.exists() {
+                create_directory(&target_path)?;
+            }
+          
+        }
+        else {
+            copy_file(entry.path(), &target_path, src)?;
+        }
+    }
+
+    Ok(())
+}
+
+
+
+pub fn generate_site(
+    root_dir: &Path,
+    interface: IpAddr,
+    interface_port: u16,
+    output_dir: Option<&Path>,
+    force: bool,
+    base_url: Option<&str>,
+    config_file: &Path,
+    mut no_port_append: bool,
+) -> Result<(Site, SocketAddr, String)> {
+
+    let mut site = Site::new(root_dir, config_file)?;
+    let address = SocketAddr::new(interface, interface_port);
+
+    //when no base url is provided, use the interface address
+    let base_url = base_url.map_or_else(
+        || {
+            no_port_append = true; 
+            address.to_string()
+        },
+        |xm | xm.to_string(),
+    );
+
+
+    if let Some(output_dir) = output_dir {
+        if !force && output_dir.exists() {
+            return Err(Error::msg(format!(
+                "Directory '{}' already exists. Use --force to overwrite.",
+                output_dir.display(),
+            )));
+        }
+        site.set_output_path(output_dir);
+    }
+
+    site.load_files(); 
+
+    site.build_output_dir();
+
+    Ok((site, address, base_url))
+}
+
+
+/// Builds the output directory for the site.
+///
+/// If `output_dir` is given and exists, it will be removed unless `force` is `false`.
+/// If `base_url` is given, it will be used to set the base URL of the site.
 /// TODO
-pub fn build_output_dir(root_dir: &Path, config_file: &Path, base_url: Option<&str>, output_dir: Option<&Path>) -> Result<()>{
+pub fn build_output_dir(root_dir: &Path, config_file: &Path, output_dir: Option<&Path>, force: bool) -> Result<()>{
+    let mut site = Site::new(root_dir, config_file)?;
+    if let Some(output_dir) = output_dir {
+        if !force && output_dir.exists() {
+            return Err(anyhow::anyhow!("Output directory {} already exists", output_dir.display()));
+        }
+
+        //set the output directory
+        site.set_output_path(output_dir);
+    }
+
+    // Load all content files before building the output directory
+    site.load_files()?;
+    
+    // Build the output directory and return the result
+    site.build_output_dir()?;
+    
+    println!("\n✅ Site built successfully!");
+    println!("   Output directory: {}", site.output_path.display());
+    
     Ok(())
 }
