@@ -5,7 +5,7 @@ use anyhow::{ Result};
 use cli::{ Cli, Command };
 
 
-use crate::utils::{fs::{ build_output_dir, create_file, get_current_config_path }, net::{available_port_checker, serve_site}};
+use crate::utils::{fs::{ build_output_dir, create_file, get_current_config_path }, net::{available_port_checker, get_available_port, serve_site}};
 
 mod cli;
 mod utils;
@@ -148,6 +148,11 @@ fn main() {
             if port != 8080 && !available_port_checker(interface, port) {
                 println!("Port {} is not available", port);
                 std::process::exit(1); 
+            }
+
+            if !available_port_checker(interface, port) {
+                port = get_available_port(interface, port).expect("Unable to find available port");
+                println!("Port {} is not available, using {} instead", port, port);
             }
 
 

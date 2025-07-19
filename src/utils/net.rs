@@ -1,10 +1,14 @@
-use std::{net::{IpAddr, TcpListener}, path::{Path, PathBuf}};
+use std::{convert::Infallible, net::{IpAddr, TcpListener}, path::{Path, PathBuf}, time::Duration};
 use std::time::Instant;
-use anyhow::{ anyhow, Result};
+use anyhow::{ anyhow, Context, Result};
+use std::thread;
+use ws::{ Message, Sender, WebSocket }; 
+use hyper::{ service::{make_service_fn, service_fn}, Body, Response, Server, StatusCode};
+use notify_debouncer_full::{new_debouncer, notify::RecursiveMode};
 use std::sync::mpsc::channel;
 use ctrlc;
 
-use crate::utils::fs::generate_site;
+use crate::utils::{fs::{build_output_dir_with_broadcaster, generate_site}, site::Site};
 use crate::utils::{fs::create_directory}; 
 
 
@@ -15,17 +19,26 @@ pub enum WatchStatus {
     Conditional(bool),
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub enum RecursiveMode {
-    // watch sub-directories
-    Recursive, 
+// #[derive(Debug, Clone, PartialEq)]
+// pub enum RecursiveMode {
+//     // watch sub-directories
+//     Recursive, 
 
-    // watch provided directory
-    NonRecursive,
-}
+//     // watch provided directory
+//     NonRecursive,
+// }
 
 
-/// TODO
+// impl RecursiveMode {
+//     pub(crate) fn is_recursive(&self) -> bool {
+//         match *self {
+//             RecursiveMode::Recursive => true, 
+//             RecursiveMode::NonRecursive => false,  
+//         }
+//     }
+// }
+
+
 pub fn serve_site(
     root_dir: &Path,
     interface: IpAddr,
@@ -36,10 +49,10 @@ pub fn serve_site(
     config_file: &Path,
     open: bool,
     no_port_append: bool,
-) -> Result<()> {
+) -> Result<impl FnOnce() -> Result<()>> {
     let start = Instant::now();
 
-    let (mut site, address, base_url) = generate_site(
+    let (mut site, address, constructed_base_url) = generate_site(
         root_dir,
         interface,
         interface_port,
@@ -50,6 +63,11 @@ pub fn serve_site(
         no_port_append,
     )?;
 
+    let base_path = match constructed_base_url.splitn(4, "/").nth(3) {
+        Some(xm) => format!("/{}", xm), 
+        None => "/".to_string(),
+    };
+
     
     if(TcpListener::bind(address)).is_err() {
         return Err(anyhow!("Cannot start server on address {}.", address));
@@ -58,17 +76,20 @@ pub fn serve_site(
     let config_buf = PathBuf::from(config_file); 
     let root_dir_str = root_dir.to_str().expect("Invalid root directory");
 
-    let mut watch_vector = vec![
+    let watch_vector = vec![
         (root_dir_str, WatchStatus::Required, RecursiveMode::NonRecursive),
         ("content", WatchStatus::Required, RecursiveMode::NonRecursive),
         ("static", WatchStatus::Optional, RecursiveMode::Recursive),
         ("templates", WatchStatus::Optional, RecursiveMode::Recursive),
+       // ("themes", WatchStatus::Conditional(site.config.themes.is_some()), RecursiveMode::Recursive),
     ];
 
     //let (tx, rx) = channel();
+    let (tx, rx) = channel();
+    let mut debouncer = new_debouncer(Duration::from_secs(1), None, tx).unwrap();
 
 
-    //let mut watchers = Vec::new();
+    let mut watchers = Vec::new();
     for (entry, mode, recursive_mode) in watch_vector {
         let watch_path = root_dir.join(entry);
         let watch_state = match mode {
@@ -76,10 +97,112 @@ pub fn serve_site(
             WatchStatus::Optional => watch_path.exists(),
             WatchStatus::Conditional(x) => x && watch_path.exists(),
         };
+
+        if watch_state {
+            debouncer.watch(
+                &root_dir.join(entry),
+                recursive_mode,
+            )
+            .with_context(|| format!("Unable to watch directory {}", entry))?;
+        }
+        watchers.push(entry.to_string());
     }
 
-    let output_path = site.output_path;
-    create_directory(&output_path)?;
+
+    //watch the directories 
+    // websocket 
+    const DEFAULT_WS_PORT: u16 = 8080;
+    let ws_port = site.config.live_reload.unwrap_or(DEFAULT_WS_PORT);
+    let ws_address = format!("{}:{}", interface, ws_port);
+    let output_path = site.output_path.clone();
+
+    let static_root_path = std::fs::canonicalize(&output_path).unwrap(); //the output directory can be changed
+
+    let broadcaster = {
+        thread::spawn(move || {
+            let rt = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .expect("Could not tokio builder");
+
+            rt.block_on(async {
+                let servelet = make_service_fn(move |_| {
+                    let static_root = static_root_path.clone();
+                    let base_path = base_path.clone(); 
+
+                    async {
+                        Ok::<_, hyper::Error>(service_fn(move |req| async {
+                            let response = Response::builder()
+                                .status(StatusCode::OK)
+                                .body(Body::empty())
+                                .unwrap();
+                            Ok::<_, hyper::Error>(response)
+                        }))
+                    }
+                });
+
+
+                let server = Server::bind(&address).serve(servelet); 
+
+                println!("Listening on {}, {}", constructed_base_url, address);
+
+                if open {
+                    if let Err(err) = open::that(&constructed_base_url) {
+                        println!("Unable to open URL: {}", err);
+                    }
+                }
+
+
+                server.await.expect("Unable to start server");
+            })
+        }); 
+
+
+        let ws_server = WebSocket::new(|output: Sender| {
+            move |msg: Message| {
+                if msg.into_text().unwrap().contains("hello") {
+                    return output.send(Message::text(
+                        r#"
+                        {
+                            "command": "hello",
+                            "protocols": [ "http://livereload.com/protocols/official-7" ],
+                            "serverName": "Genetics"
+                        }
+                    "#
+                    ))
+                }
+
+                Ok(())
+            }
+        })
+        .unwrap();
+
+        let broadcaster = ws_server.broadcaster();
+
+        let ws_server = ws_server.bind(&*ws_address).map_err(|err| {
+            println!("Unable to bind to address: {}", err);
+            ::std::process::exit(1);
+        })?;
+
+
+        thread::spawn(move || {
+            ws_server.run().unwrap();
+        });
+
+        broadcaster
+    };
+
+    //we can watch for changes in the config file
+    let config_path = PathBuf::from(config_file);
+    let config_name = config_path.file_name().unwrap().to_str().expect("Invalid config file");
+    let watch_list = watchers
+        .iter()
+        .map(|entry| if *entry == root_dir_str { config_name } else { entry })
+        .collect::<Vec<&str>>()
+        .join(",");
+
+    println!("\nWatching directories: {}", watch_list);
+   create_directory(&output_path)?;
 
     // let watch_list = watchers
     //     .iter()
@@ -97,7 +220,44 @@ pub fn serve_site(
     })
     .expect("Unable to set Ctrl+C handler");
 
-    Ok(())
+    // let templates = |site: &mut Site| {
+    //     build_output_dir_with_broadcaster(
+    //         &broadcaster, 
+    //         site.reload_templates, 
+    //         &site.templates_path.to_string_lossy()
+    //     );
+    // };
+
+    
+    let create_site = move || -> Result<()> {
+        match generate_site(
+        root_dir, 
+        interface, 
+        interface_port, 
+        output_dir, 
+        force, 
+        base_url, 
+        config_file, 
+        no_port_append
+    ) {
+        Ok((_, _, _)) => {
+            //clean up serve error if there's
+            // perform rebuilding of site
+            build_output_dir_with_broadcaster(
+                &broadcaster, 
+                Ok(()), 
+                "/x.js"
+            );
+            Ok(())
+        },
+        Err(err) => {
+            println!("Unable to serve site: {}", err);
+            Err(err)
+        },
+    }
+    };
+
+    Ok(create_site)
 }
 
 /// Gets an available port

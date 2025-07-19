@@ -17,6 +17,10 @@ pub struct Config {
 
     /// Title of the site. Defaults to None
     pub title: Option<String>,
+
+    /// Live reload port. Defaults to None
+    pub live_reload: Option<u16>,
+    
     /// Description of the site
     pub description: Option<String>,
 

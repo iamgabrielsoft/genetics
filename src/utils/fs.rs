@@ -1,9 +1,12 @@
 use std::io::{Read, Write};
+
+use ws::{Message, Sender, WebSocket};
 use std::net::{IpAddr, SocketAddr};
 use std::path::{ Path, PathBuf };
 use std::fs::{ create_dir_all, File };
-use anyhow::{Context, Error, Ok, Result};
+use anyhow::{Context, Error,  Result};
 use walkdir::WalkDir;
+
 
 use crate::utils::site::Site;
 
@@ -142,9 +145,9 @@ pub fn generate_site(
         site.set_output_path(output_dir);
     }
 
-    site.load_files(); 
+    site.load_files()?; 
 
-    site.build_output_dir();
+    site.build_output_dir()?;
 
     Ok((site, address, base_url))
 }
@@ -176,4 +179,63 @@ pub fn build_output_dir(root_dir: &Path, config_file: &Path, output_dir: Option<
     println!("   Output directory: {}", site.output_path.display());
     
     Ok(())
+}
+
+
+// fn rebuild_done_handling(broadcaster: &Sender, res: Result<()>, reload_path: &str) {
+//     match res {
+//         Ok(_) => {
+//             clear_serve_error();
+//             broadcaster
+//                 .send(format!(
+//                     r#"
+//                 {{
+//                     "command": "reload",
+//                     "path": {},
+//                     "originalPath": "",
+//                     "liveCSS": true,
+//                     "liveImg": true,
+//                     "protocol": ["http://livereload.com/protocols/official-7"]
+//                 }}"#,
+//                     serde_json::to_string(&reload_path).unwrap()
+//                 ))
+//                 .unwrap();
+//         }
+//         Err(e) => {
+//             let msg = "Failed to build the site";
+
+//             messages::unravel_errors(msg, &e);
+//             set_serve_error(msg, e);
+//         }
+//     }
+// }
+
+/// Builds the output directory for the site and sends a reload message to the broadcaster
+///
+/// # Arguments
+///
+/// * `broadcaster` - A reference to the broadcaster
+/// * `res` - The result of the build operation
+/// * `reload_path` - The path to reload
+pub fn build_output_dir_with_broadcaster(broadcaster: &Sender, res: Result<()>, reload_path: &str) {
+    match res {
+        Ok(_)  => {
+            broadcaster.send(format!(
+                r#"
+                {{
+                    "command": "reload",
+                    "path": {},
+                    "originalPath": "",
+                    "liveCSS": true,
+                    "liveImg": true,
+                    "protocol": ["http://livereload.com/protocols/official-7"]
+                }}"#,
+                format!(r#""{}""#, reload_path)
+            ))
+            .unwrap();
+        }
+        Err(e) => {
+            println!("Error while building the site: {}", e);
+        }
+    }
 }
