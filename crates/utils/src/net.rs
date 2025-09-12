@@ -1,15 +1,19 @@
-use std::{net::{IpAddr, TcpListener}, path::{Path, PathBuf}, time::Duration};
-use std::time::Instant;
-use anyhow::{ anyhow, Context, Result};
-use std::thread;
-use ws::{ Message, Sender, WebSocket }; 
-use hyper::{ service::{make_service_fn, service_fn}, Body, Response, Server, StatusCode};
+use std::{
+    net::{IpAddr, TcpListener},
+    path::{Path, PathBuf},
+    sync::mpsc::channel,
+    thread,
+    time::{Duration, Instant},
+};
+use errors::{ anyhow, Context, Result};
+use hyper::{
+    service::{make_service_fn, service_fn},
+    Body, Response, Server, StatusCode,
+};
 use notify_debouncer_full::{new_debouncer, notify::RecursiveMode};
-use std::sync::mpsc::channel;
-use ctrlc;
+use ws::{Message, Sender, WebSocket};
+use crate::fs::{ build_output_dir_with_broadcaster, generate_site, create_directory };
 
-use crate::utils::{fs::{build_output_dir_with_broadcaster, generate_site}};
-use crate::utils::{fs::create_directory}; 
 
 
 #[derive(Debug, PartialEq)]

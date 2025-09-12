@@ -1,9 +1,10 @@
 use std::path::Path;
 use regex::Regex; 
-use anyhow::{ bail, Ok, Result, Error}; 
+use anyhow::{Ok, Result, Error}; 
 use once_cell::sync::Lazy;
 
-use crate::utils::{fs::read_file, site::Config};
+use crate::fs::read_file;
+use crate::site::Config;
 
 static TOML_REGEX: Lazy<Regex> = Lazy::new(|| {
     Regex::new(

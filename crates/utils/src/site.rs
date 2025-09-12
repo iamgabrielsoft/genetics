@@ -1,10 +1,11 @@
-use std::{collections::HashSet, path::{Path, PathBuf}, time::Instant};
-use std::sync::{Arc, Mutex, RwLock};
-use walkdir::{DirEntry, WalkDir};
-use toml;
-use serde::{ Deserialize };
-use anyhow::{ Result,  bail };
-use crate::utils::{fs::{copy_directory, read_file}, page::Page};
+use std::{collections::HashSet, path::{Path, PathBuf}};
+use libs::walkdir::WalkDir;
+use serde::Deserialize;
+use libs::toml;
+use errors::{ Result, bail };
+
+use crate::fs::{ copy_directory, read_file};
+use crate::page::{ Page };
 
 
 
@@ -144,7 +145,7 @@ impl Site {
                             }
                         }
                     })
-                    .collect::<Vec<DirEntry>>();
+                    .collect::<Vec<walkdir::DirEntry>>();
 
 
                 //add sections here

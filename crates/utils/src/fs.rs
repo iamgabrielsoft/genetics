@@ -1,15 +1,18 @@
 use std::io::{Read, Write};
-
-use ws::Sender;
 use std::net::{IpAddr, SocketAddr};
-use std::path::{ Path, PathBuf };
-use std::fs::{ create_dir_all, File };
-use anyhow::{Context, Error,  Result};
-use walkdir::WalkDir;
+use std::path::{Path, PathBuf};
+use std::fs::{create_dir_all, File};
+use anyhow::{Context, Error, Result};
 
+// Re-exports from libs
+use libs::{
+    walkdir::WalkDir,
+    ws::Sender,
+};
 
-use crate::utils::site::Site;
-
+// Local modules
+use crate::site::Site;
+use crate::page::Page;
 
 /// Get the current config path
 pub fn get_current_config_path(dir: &Path, config_path: &Path) -> (PathBuf, PathBuf) {
