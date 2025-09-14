@@ -13,7 +13,9 @@ path = "src/lib.rs"
 
 [dependencies]
 pulldown-cmark = "0.9"
+pulldown-cmark-escape = "0.10"
 anyhow = "1.0"
 tera = "1.20.0"
 config = { path = "../config" }
 libs = { path = "../libs" }
+utils = { path = "../utils" }

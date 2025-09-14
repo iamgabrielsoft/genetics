@@ -1,6 +1,6 @@
 use std::{net::{IpAddr, TcpListener}, path::{Path, PathBuf}, time::Duration};
 use std::time::Instant;
-use anyhow::{ anyhow, Context, Result};
+use errors::{ Context, Result, anyhow};
 use std::thread;
 use ws::{ Message, Sender, WebSocket }; 
 use hyper::{ service::{make_service_fn, service_fn}, Body, Response, Server, StatusCode};

@@ -12,7 +12,6 @@ use libs::{
 
 // Local modules
 use crate::site::Site;
-use crate::page::Page;
 
 /// Get the current config path
 pub fn get_current_config_path(dir: &Path, config_path: &Path) -> (PathBuf, PathBuf) {

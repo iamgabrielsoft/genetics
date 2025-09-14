@@ -4,11 +4,11 @@ use ws::Sender;
 use std::net::{IpAddr, SocketAddr};
 use std::path::{ Path, PathBuf };
 use std::fs::{ create_dir_all, File };
-use anyhow::{Context, Error,  Result};
+use errors::{Context, Result, Error};
 use walkdir::WalkDir;
 
 
-use crate::utils::site::Site;
+use utils::site::Site;
 
 
 /// Get the current config path
@@ -162,7 +162,7 @@ pub fn build_output_dir(root_dir: &Path, config_file: &Path, output_dir: Option<
     let mut site = Site::new(root_dir, config_file)?;
     if let Some(output_dir) = output_dir {
         if !force && output_dir.exists() {
-            return Err(anyhow::anyhow!("Output directory {} already exists", output_dir.display()));
+            return Err(Error::msg(format!("Output directory {} already exists", output_dir.display())));
         }
 
         //set the output directory

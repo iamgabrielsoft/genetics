@@ -1,16 +1,15 @@
 //! Markdown processing functionality
 
-use libs::pulldown_cmark::CowStr;
-use libs::pulldown_cmark as cmark;
-use libs::pulldown_cmark_escape as cmark_escape;
-use libs::pulldown_cmark_escape::escape_html;
+use pulldown_cmark::CowStr;
+use pulldown_cmark as cmark;
+use pulldown_cmark_escape::escape_html;
 use anyhow::Result;
 use std::fmt::Write;
 use std::vec;
 
-
-use self::cmark::{Event, LinkType, Options, Parser, Tag, TagEnd};
+use pulldown_cmark::{Event, Options, Parser, Tag};
 use crate::context::RenderContext;
+use utils::content::Heading;
 
 
 const CONTINUE_READING: &str = "<span id=\"continue-reading\"></span>";
@@ -47,7 +46,7 @@ impl HeadingStruct {
         }
     }
 
-    pub fn format_to_html(&self, text: &str, id: &str) -> String {
+    pub fn format_to_html(&self, id: &str) -> String {
         let mut buffer = String::with_capacity(100);
 
         buffer.write_str("<h").unwrap();
@@ -68,12 +67,40 @@ impl HeadingStruct {
             buffer.write_str("\"").unwrap();
         }
         buffer.write_str(">").unwrap();
-        escape_html(&mut buffer, text).unwrap();
-        buffer.write_str("</h").unwrap();
-        buffer.write_str(&self.level.to_string()).unwrap();
-        buffer.write_str(">").unwrap();
         buffer
     }
+}
+
+
+/// Extracts text from a slice of markdown events
+fn get_text(parser_slice: &[Event]) -> String {
+    let mut title = String::new(); 
+
+    for event in parser_slice.iter() {
+        match  event {
+            Event::Text(text) | Event::Code(text)=> title += text,
+            _ => continue,
+        }
+    }
+
+    title
+}
+
+
+/// Returns a unique anchor for a heading
+fn get_anchor(anchors: &[String], name: String, level: u16) -> String {
+    if level == 0 && !anchors.contains(&name) {
+        return name
+    }
+
+    let new_anchor = format!("{}-{}", name, level + 1);
+    if !anchors.contains(&new_anchor) {
+        return new_anchor;
+    }
+
+    // if the anchor is not unique, try a different one
+
+    get_anchor(anchors, new_anchor, level + 1)
 }
 
 fn get_heading_refs(events: &[Event]) -> Vec<HeadingStruct> {
@@ -81,16 +108,16 @@ fn get_heading_refs(events: &[Event]) -> Vec<HeadingStruct> {
 
     for (i, event) in events.iter().enumerate() {
         match event {
-            Event::Start(Tag::Heading { level, id, classes, .. }) => {
+            Event::Start(Tag::Heading(level, _, _)) => {
                 heading_refs.push(
                     HeadingStruct::new(
                         i, 
                         *level as u32, 
-                        id.clone().map(|s| s.to_string()),
-                        &classes.iter().map(|x | x.to_string()).collect::<Vec<_>>(),
+                        None, // The ID is not directly available in the current API
+                        &[], // Classes are not directly available in the current API
                     ));
             },
-            Event::End(TagEnd::Heading(_)) => {
+            Event::End(Tag::Heading(_, _, _)) => {
                 heading_refs.last_mut().expect("Heading end before start?").end_idx = i;
             },
             _ => {}
@@ -107,14 +134,15 @@ pub fn markdown_to_html(content: &str, context: &RenderContext) -> Result<Render
         .or_else(|| context.tera_context.get("section"))
         .map(|x| x.as_object().unwrap().get("relative_path").unwrap().as_str().unwrap());
     let mut html = String::with_capacity(content.len());
-    let mut summary = None;
-   // let summary = None;
+    let summary = None;
     // Set while parsing
-    let mut error = None;
+    let error = None;
 
     let mut opts = Options::empty();
     let internal_links = Vec::new(); 
     let external_links = Vec::new();
+
+    let mut headings: Vec<Heading> = Vec::new();
 
 
     opts.insert(Options::ENABLE_TABLES);
@@ -129,7 +157,7 @@ pub fn markdown_to_html(content: &str, context: &RenderContext) -> Result<Render
         for (event, mut range) in Parser::new_ext(content, opts).into_offset_iter() {
             match event {
                 Event::Start(tag) => {
-                    
+
                 },
                 Event::End(tag) => {
                     
@@ -177,15 +205,45 @@ pub fn markdown_to_html(content: &str, context: &RenderContext) -> Result<Render
 
         let heading_refs = get_heading_refs(&events); 
 
-        let mut anchors_to_insert = vec![];
+        let mut anchors_to_insert: Vec<(usize, Event<'_>)> = vec![];
         let mut inserted_anchors = vec![];
-        for heading in heading_refs {
+        for heading in &heading_refs {
             if let Some(e) = &heading.id {
                  // This line of code creates a new owned copy of the string `e` and pushes it into the 
                  //`inserted_anchors` vector. This is done to ensure that we have a complete list of all the anchors that were inserted. 
                 inserted_anchors.push(e.to_owned());
                
             }
+        }
+
+
+        for mut heading_ref in heading_refs {
+            let  start_idx = heading_ref.start_idx; 
+            let end_idx = heading_ref.end_idx; 
+            let title = get_text(&events[start_idx + 1..end_idx]);
+
+            if heading_ref.id.is_none() {
+                heading_ref.id = Some(get_anchor(&inserted_anchors, title.clone(), 0));
+            }
+
+
+            inserted_anchors.push(heading_ref.id.clone().unwrap());
+            let id = inserted_anchors.last().unwrap();
+
+            let html = heading_ref.format_to_html(id);
+            events[start_idx] = Event::Html(html.into()); 
+
+            let permalink = format!("{}#{}", context.current_page_permalink, id); 
+            let h = Heading  {
+                level: heading_ref.level, 
+                id: id.to_owned(), 
+                title,
+                permalink, 
+                children: Vec::new(),
+            };
+
+            //headings.
+            headings.push(h);
         }
 
         let continue_reading = events
@@ -195,11 +253,11 @@ pub fn markdown_to_html(content: &str, context: &RenderContext) -> Result<Render
 
 
         // This line creates a new empty vector to track HTML tags
-        let mut tags: Vec<cmark::TagEnd> = Vec::new();
+        let mut tags: Vec<Tag> = Vec::new();
         for event in &events[..continue_reading] {
             match event {
-                Event::Start(Tag::HtmlBlock) | Event::End(TagEnd::HtmlBlock) => {}, 
-                Event::Start(tag) => tags.push(tag.to_end()),
+                Event::Html(_) => {},
+                Event::Start(tag) => tags.push(tag.clone()),
                 Event::End(end_tag) => {
                   tags.truncate(tags.iter().rposition(|x|*x == *end_tag).unwrap_or(0));
                 }, 
@@ -207,10 +265,15 @@ pub fn markdown_to_html(content: &str, context: &RenderContext) -> Result<Render
             }
         }
 
-        let parser = Parser::new_ext(content, opts);
-        events.extend(parser);
+        //let parser = Parser::new_ext(content, opts);
+        //events.extend(parser);
+        // The `into_iter()` method consumes the `events` vector and returns an iterator over its elements. The `mut` keyword indicates that the iterator can mutate the elements.
+        // By assigning the iterator to the `events` variable, we can use the iterator to iterate over the elements of the vector one by one.
+        // The `mut` keyword is necessary because the `events` vector is being consumed and we want to be able to modify its elements if needed.
+        let mut events = events.into_iter();
 
-        cmark::html::push_html(&mut html, events.into_iter());
+        cmark::html::push_html(&mut html, events.by_ref().take(continue_reading));
+       // events.for_each(drop);
     }
 
     if let Some(e) = error {

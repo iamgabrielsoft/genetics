@@ -1,7 +1,7 @@
 use std::{self, io::{self, BufRead, Write}, path::Path};
 use std::fs::{ create_dir };
 use std::time::Instant;
-use anyhow::{ Result};
+use errors::Result;
 use cli::{ Cli, Command };
 
 
