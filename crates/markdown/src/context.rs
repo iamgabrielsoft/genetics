@@ -7,6 +7,7 @@ pub struct RenderContext<'a> {
     pub tera: Cow<'a, Tera>, 
     pub config: &'a Config, 
     pub tera_context: TeraContext,
+    pub current_page_path: Option<&'a str>,
     pub current_page_permalink: &'a str,
     pub permalinks: Cow<'a, HashMap<String, String>>,
 }
@@ -16,6 +17,7 @@ impl<'a> RenderContext<'a> {
         tera: &'a Tera,
         config: &'a Config,
         tera_context: TeraContext,
+        current_page_path: Option<&'a str>,
         current_page_permalink: &'a str,
         permalinks: Cow<'a, HashMap<String, String>>,
     ) -> Self {
@@ -26,6 +28,7 @@ impl<'a> RenderContext<'a> {
             tera: Cow::Borrowed(tera),
             config,
             tera_context,
+            current_page_path,
             current_page_permalink,
             permalinks,
         }
@@ -33,11 +36,13 @@ impl<'a> RenderContext<'a> {
 
     
 
+    /// Creates a new RenderContext with default values
     pub fn from_config(config: &'a Config) -> RenderContext<'a>{
         Self {
             tera: Cow::Owned(Tera::default()),
             tera_context: TeraContext::new(),
             config,
+            current_page_path: None,
             current_page_permalink: "",
             // Cow::Owned creates a new owned HashMap and wraps it into a `Cow`
             // This is useful when you want to create a default value for a `Cow`

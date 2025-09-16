@@ -1,4 +1,9 @@
 
+
+
+pub mod markup;
+
+
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Mode {
     Build, 

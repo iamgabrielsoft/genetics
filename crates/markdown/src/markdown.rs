@@ -1,18 +1,22 @@
 //! Markdown processing functionality
 
+use libs::{pulldown_cmark::LinkType};
+use libs::gh_emoji::Replacer as EmojiReplacer;
+use once_cell::sync::Lazy;
 use pulldown_cmark::CowStr;
 use pulldown_cmark as cmark;
 use pulldown_cmark_escape::escape_html;
-use anyhow::Result;
+use anyhow::{Error, Result};
 use std::fmt::Write;
 use std::vec;
 
 use pulldown_cmark::{Event, Options, Parser, Tag};
-use crate::context::RenderContext;
-use utils::content::Heading;
+use crate::{codeblock::CodeBlock, context::RenderContext};
+use utils::{content::Heading, net::is_external_link};
 
-
+static EMOJI_REPLACER: Lazy<EmojiReplacer> = Lazy::new(|| EmojiReplacer::new());
 const CONTINUE_READING: &str = "<span id=\"continue-reading\"></span>";
+pub const SHORTCODE_PLACEHOLDER: &str = "@@GENETICS_SHORTCODE_PLACEHOLDER@@";
 
 #[derive(Debug)]
 pub struct Rendered {
@@ -87,6 +91,47 @@ fn get_text(parser_slice: &[Event]) -> String {
 }
 
 
+/// Fixes a link of whatever type it is (internal, external, email)
+fn link_fixer(
+    link_type: LinkType, 
+    link: &str, 
+    context: &RenderContext, 
+    internal_links: &mut Vec<(String, Option<String>)>,
+    external_links: &mut Vec<String>,
+) -> Result<String>{
+    if link_type == LinkType::Email {
+        return Ok(link.to_string());
+    }
+
+    let result = if link.starts_with("@/") {
+        // Handle internal links starting with @/
+        // For now, just return the link as is
+        link.to_string()
+    }
+    else if is_external_link(link){
+        external_links.push(link.to_owned());
+        link.to_owned()
+    }
+    else if link == "#" {
+        link.to_string()
+    }
+    else if let Some(stripped_link) = link.strip_prefix('#') {
+        // local anchor without the internal zola path
+        if let Some(current_path) = context.current_page_path {
+            internal_links.push((current_path.to_owned(), Some(stripped_link.to_owned())));
+            format!("{}{}", context.current_page_permalink, &link)
+        } else {
+            link.to_string()
+        }
+    }
+    else {
+        link.to_string()
+    };
+
+    Ok(result)
+}
+
+
 /// Returns a unique anchor for a heading
 fn get_anchor(anchors: &[String], name: String, level: u16) -> String {
     if level == 0 && !anchors.contains(&name) {
@@ -108,7 +153,7 @@ fn get_heading_refs(events: &[Event]) -> Vec<HeadingStruct> {
 
     for (i, event) in events.iter().enumerate() {
         match event {
-            Event::Start(Tag::Heading(level, _, _)) => {
+            Event::Start(Tag::Heading(level)) => {
                 heading_refs.push(
                     HeadingStruct::new(
                         i, 
@@ -117,7 +162,7 @@ fn get_heading_refs(events: &[Event]) -> Vec<HeadingStruct> {
                         &[], // Classes are not directly available in the current API
                     ));
             },
-            Event::End(Tag::Heading(_, _, _)) => {
+            Event::End(Tag::Heading(_)) => {
                 heading_refs.last_mut().expect("Heading end before start?").end_idx = i;
             },
             _ => {}
@@ -136,63 +181,128 @@ pub fn markdown_to_html(content: &str, context: &RenderContext) -> Result<Render
     let mut html = String::with_capacity(content.len());
     let summary = None;
     // Set while parsing
-    let error = None;
-
+    let mut error = None;
+    let inside_attribute = false;
     let mut opts = Options::empty();
-    let internal_links = Vec::new(); 
-    let external_links = Vec::new();
+    let mut internal_links = Vec::new(); 
+    let mut external_links = Vec::new();
+    let mut code_block: Option<CodeBlock> = None; 
 
+    let mut stop_next_end_p = false;
     let mut headings: Vec<Heading> = Vec::new();
+
+
+    // This line defines a closure that takes a string reference as input and returns a boolean. 
+    // The closure checks if the input string contains the SHORTCODE_PLACEHOLDER string.
+    let contains_shortcode = |txt: &str| txt.contains(SHORTCODE_PLACEHOLDER);
 
 
     opts.insert(Options::ENABLE_TABLES);
     opts.insert(Options::ENABLE_FOOTNOTES);
     opts.insert(Options::ENABLE_STRIKETHROUGH);
     opts.insert(Options::ENABLE_TASKLISTS);
-    opts.insert(Options::ENABLE_HEADING_ATTRIBUTES);
-
 
     {
+        let mut accumulated_blocks = String::new(); 
+    
         let mut events = Vec::new();
         for (event, mut range) in Parser::new_ext(content, opts).into_offset_iter() {
             match event {
-                Event::Start(tag) => {
+                Event::Text(text) => {
+                    if let Some(ref mut _code_block) = code_block {
+                       if contains_shortcode(text.as_ref()) {
+                        let stack_start = events.len(); 
 
-                },
-                Event::End(tag) => {
-                    
-                },
-                Event::Text(cow_str) => {
-                    // if let Some(ref mut code_block) = code_block {
-                    //     let stack_start = events.len(); 
+                        for event in events[stack_start..].iter() {
+                            match event {
+                                _ => {
+                                   error = Some(Error::msg(
+                                    format!("Shortcode not found: {:?}", event)
+                                   )); 
 
+                                   break; 
+                                }
+                            }
+                        }
 
-                    //     events.truncate(stack_start);
-                    // }
-                    // else {
+                        events.truncate(stack_start); //let's remove everything from the stack
+                       }
+                       else {
+                        accumulated_blocks += &text; 
+                       }
+                    }
+                    else {
+                        let text = if context.config.markdown.render_emoji {
+                            EMOJI_REPLACER.replace_all(&text).to_string().into()
+                        } else {
+                            text
+                        };
 
-                    // }
+                        if !contains_shortcode(text.as_ref()) {
+                            if inside_attribute {
+                                let mut buffer = "".to_string();
+                                escape_html(&mut buffer, text.as_ref()).unwrap();
+                                events.push(Event::Html(buffer.into()));
+                            } else {
+                                events.push(Event::Text(text));
+                            }
+                            continue;
+                        }
+                    }
+                }
+                Event::Start(Tag::CodeBlock(kind)) => {
+                    // Store the code block info for when we process the text content
+                    // The actual processing will happen when we encounter the End(Tag::CodeBlock)
+                    code_block = Some(CodeBlock {
+                        // Initialize with default values or extract from kind if needed
+                    });
+                    // Push the opening tag for the code block
+                    events.push(Event::Html("<pre><code>".into()));
+               }
+                
+                Event::Start(Tag::Link(link_type, dest_url, title)) => {
+                    if dest_url.is_empty() {
+                        error = Some(Error::msg("Link destination cannot be empty"));
+                        events.push(Event::Start(Tag::Link(link_type, "#".into(), title.into())));
+                    } else {
+                        let fixed_link = match link_fixer(
+                            link_type, 
+                            &dest_url.to_string(), 
+                            context, 
+                            &mut internal_links, 
+                            &mut external_links,
+                        ) {
+                            Ok(fixed_link) => fixed_link,
+                            Err(e) => {
+                                error = Some(e);
+                                events.push(Event::Html("".into()));
+                                continue; 
+                            }
+                        };
+
+                        events.push(
+                            if is_external_link(&dest_url) {
+                                let mut escaped = String::new(); 
+                                pulldown_cmark_escape::escape_href(&mut escaped, &dest_url)
+                                    .expect("Could not write to buffer");
+                                Event::Html(format!("<a href='{}'>{}</a>", escaped, title).into())
+                            } else {
+                                Event::Start(Tag::Link(link_type, fixed_link.into(), title.into()))
+                            }
+                        );
+                    }
+                }
+                Event::Start(Tag::Paragraph) => {
+                    stop_next_end_p = true; 
+                    events.push(event);
                 },
-                Event::Code(cow_str) => {
-                    
-                },
-                Event::Html(cow_str) => {
-                    
-                },
-                Event::FootnoteReference(cow_str) => {
-                    
-                },
-                Event::SoftBreak => {
-                    
-                },
-                Event::HardBreak => {
-                    
-                },
-                Event::Rule => {
-                    
-                },
-                Event::TaskListMarker(_) => {
-                    
+                Event::End(Tag::Paragraph) => {
+                    events.push(if stop_next_end_p {
+                        stop_next_end_p = false;
+                        Event::Html("".into())
+                    } else {
+                        event
+                    });
                 },
                 _ => events.push(event)
             }
@@ -205,7 +315,7 @@ pub fn markdown_to_html(content: &str, context: &RenderContext) -> Result<Render
 
         let heading_refs = get_heading_refs(&events); 
 
-        let mut anchors_to_insert: Vec<(usize, Event<'_>)> = vec![];
+       // let mut anchors_to_insert: Vec<(usize, Event<'_>)> = vec![];
         let mut inserted_anchors = vec![];
         for heading in &heading_refs {
             if let Some(e) = &heading.id {

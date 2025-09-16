@@ -281,6 +281,12 @@ pub fn available_port_checker(interface:IpAddr, port: u16) -> bool {
 }
 
 
+
+/// Checks if a link is external
+pub fn is_external_link(link: &str) -> bool {
+    link.starts_with("http://") || link.starts_with("https://")
+}
+
 #[cfg(test)]
 mod test {
     

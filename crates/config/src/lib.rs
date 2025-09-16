@@ -1,5 +1,8 @@
 //! Configuration management for the Genetics static site generator.
 
+
+pub mod markup;
+
 use serde::{Deserialize, Serialize};
 
 /// Represents the different modes the application can run in
@@ -33,6 +36,9 @@ pub struct Config {
     
     /// Current operating mode
     pub mode: Mode,
+
+    /// Markdown configuration
+    pub markdown: markup::Markdown,
 }
 
 /// Serialized version of the config for template rendering
@@ -80,6 +86,7 @@ mod tests {
             title: Some("Test Site".to_string()),
             description: Some("A test site".to_string()),
             mode: Mode::Build,
+            markdown: markup::Markdown::default(),
         };
         
         let serialized = config.serialize();
