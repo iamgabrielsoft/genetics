@@ -14,3 +14,4 @@ pub use globset;
 pub use ws;
 pub use tera;
 pub use gh_emoji;
+pub use syntect;

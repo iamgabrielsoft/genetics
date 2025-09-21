@@ -130,30 +130,30 @@ impl Site {
             }
 
             if path.is_dir() {
-                let index_files = WalkDir::new(path)
-                    .follow_links(true)
-                    .max_depth(1)
-                    .into_iter()
-                    .filter_map(|e| match e {
-                        Err(_) => None,
-                        Ok(f) => {
-                            if f.path().is_file() {
-                                Some(f)
-                            }
-                            else {
-                                None
-                            }
-                        }
-                    })
-                    .collect::<Vec<walkdir::DirEntry>>();
+                // let index_files = WalkDir::new(path)
+                //     .follow_links(true)
+                //     .max_depth(1)
+                //     .into_iter()
+                //     .filter_map(|e| match e {
+                //         Err(_) => None,
+                //         Ok(f) => {
+                //             if f.path().is_file() {
+                //                 Some(f)
+                //             }
+                //             else {
+                //                 None
+                //             }
+                //         }
+                //     })
+                //     .collect::<Vec<walkdir::DirEntry>>();
 
 
                 //add sections here
-                for index in index_files {
-                    let path = index.path(); 
+                // for index in index_files {
+                //     let path = index.path(); 
                     
-                   // self.add_section(path.display().to_string());
-                }
+                //    // self.add_section(path.display().to_string());
+                // }
             }
             else {
 
@@ -168,10 +168,14 @@ impl Site {
 
     /// Add a section to the site
     /// TODO
-    pub fn add_section(&mut self, section: HashSet<String>) -> Result<()> {
+    pub fn add_section(&mut self, _section: HashSet<String>) -> Result<()> {
 
         
         Ok(())
+    }
+
+    pub fn set_base_url(&mut self, base_url: String) {
+        self.config.base_url = base_url;
     }
 
 

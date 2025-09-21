@@ -1,5 +1,5 @@
 use std::{net::{IpAddr, TcpListener}, path::{Path, PathBuf}, time::Duration};
-use std::time::Instant;
+// use std::time::Instant;
 use errors::{ Context, Result, anyhow};
 use std::thread;
 use ws::{ Message, Sender, WebSocket }; 
@@ -16,6 +16,7 @@ use crate::utils::{fs::create_directory};
 pub enum WatchStatus {
     Required, 
     Optional, 
+    #[allow(dead_code)]
     Conditional(bool),
 }
 
@@ -50,9 +51,9 @@ pub fn serve_site(
     open: bool,
     no_port_append: bool,
 ) ->  Result<()> {
-    let start = Instant::now();
+    //let start = Instant::now();
 
-    let (mut site, address, constructed_base_url) = generate_site(
+    let (site, address, constructed_base_url) = generate_site(
         root_dir,
         interface,
         interface_port,
@@ -63,17 +64,17 @@ pub fn serve_site(
         no_port_append,
     )?;
 
-    let base_path = match constructed_base_url.splitn(4, "/").nth(3) {
-        Some(xm) => format!("/{}", xm), 
-        None => "/".to_string(),
-    };
+    // let base_path = match constructed_base_url.splitn(4, "/").nth(3) {
+    //     Some(xm) => format!("/{}", xm), 
+    //     None => "/".to_string(),
+    // };
 
     
     if(TcpListener::bind(address)).is_err() {
         return Err(anyhow!("Cannot start server on address {}.", address));
     }
 
-    let config_buf = PathBuf::from(config_file); 
+    //let config_buf = PathBuf::from(config_file); 
     let root_dir_str = root_dir.to_str().expect("Invalid root directory");
 
     let watch_vector = vec![
@@ -85,7 +86,7 @@ pub fn serve_site(
     ];
 
     //let (tx, rx) = channel();
-    let (tx, rx) = channel();
+    let (tx, _) = channel();
     let mut debouncer = new_debouncer(Duration::from_secs(1), None, tx).unwrap();
 
 
@@ -116,7 +117,7 @@ pub fn serve_site(
     let ws_address = format!("{}:{}", interface, ws_port);
     let output_path = site.output_path.clone();
 
-    let static_root_path = std::fs::canonicalize(&output_path).unwrap(); //the output directory can be changed
+   // let static_root_path = std::fs::canonicalize(&output_path).unwrap(); //the output directory can be changed
 
     let broadcaster = {
         thread::spawn(move || {
@@ -127,11 +128,11 @@ pub fn serve_site(
 
             rt.block_on(async {
                 let servelet = make_service_fn(move |_| {
-                    let static_root = static_root_path.clone();
-                    let base_path = base_path.clone(); 
+                   // let static_root = static_root_path.clone();
+                   // let base_path = base_path.clone(); 
 
                     async {
-                        Ok::<_, hyper::Error>(service_fn(move |req| async {
+                        Ok::<_, hyper::Error>(service_fn(move |_| async {
                             let response = Response::builder()
                                 .status(StatusCode::OK)
                                 .body(Body::empty())

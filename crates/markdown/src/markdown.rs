@@ -11,6 +11,7 @@ use std::fmt::Write;
 use std::vec;
 
 use pulldown_cmark::{Event, Options, Parser, Tag};
+use crate::fence::FenceSettings;
 use crate::{codeblock::CodeBlock, context::RenderContext};
 use utils::{content::Heading, net::is_external_link};
 
@@ -206,7 +207,7 @@ pub fn markdown_to_html(content: &str, context: &RenderContext) -> Result<Render
         let mut accumulated_blocks = String::new(); 
     
         let mut events = Vec::new();
-        for (event, mut range) in Parser::new_ext(content, opts).into_offset_iter() {
+        for (event, _) in Parser::new_ext(content, opts).into_offset_iter() {
             match event {
                 Event::Text(text) => {
                     if let Some(ref mut _code_block) = code_block {
@@ -250,15 +251,35 @@ pub fn markdown_to_html(content: &str, context: &RenderContext) -> Result<Render
                         }
                     }
                 }
-                Event::Start(Tag::CodeBlock(kind)) => {
+                Event::Start(Tag::CodeBlock(ref kind)) => {
                     // Store the code block info for when we process the text content
                     // The actual processing will happen when we encounter the End(Tag::CodeBlock)
-                    code_block = Some(CodeBlock {
-                        // Initialize with default values or extract from kind if needed
-                    });
-                    // Push the opening tag for the code block
-                    events.push(Event::Html("<pre><code>".into()));
-               }
+                    let fence = match kind {
+                        cmark::CodeBlockKind::Fenced(fence_info) => FenceSettings::new(fence_info), 
+                        _ => FenceSettings::new(""),
+                    }; 
+
+                    let (block, begin) = match CodeBlock::new(fence, context.config, path) {
+                        Ok(cb) => cb,
+                        Err(e) => {
+                            error = Some(e);
+                            break;
+                        }
+                    };
+
+                    code_block = Some(block); 
+                    events.push(Event::Html(begin.into()));
+                }
+                Event::End(Tag::CodeBlock(_)) => {
+                    if let Some(mut code_block) = code_block {
+                        let html = code_block.highlight(&accumulated_blocks);
+                        events.push(Event::Html(html.into()));
+                        accumulated_blocks.clear();
+                    }
+
+                    code_block = None; 
+                    events.push(Event::Html("</code></pre>".into()));
+                }
                 
                 Event::Start(Tag::Link(link_type, dest_url, title)) => {
                     if dest_url.is_empty() {

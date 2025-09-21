@@ -20,7 +20,7 @@ pub fn get_current_config_path(dir: &Path, config_path: &Path) -> (PathBuf, Path
     });
 
     let config_file_uncontaminated = root_dir.join(config_path);
-    let config_file = config_file_uncontaminated.canonicalize().unwrap_or_else(|e|{
+    let config_file = config_file_uncontaminated.canonicalize().unwrap_or_else(|_|{
         println!("Unable to canonicalize config file {}", config_file_uncontaminated.display());
         std::process::exit(1);
     });
@@ -62,6 +62,7 @@ pub fn create_file(path: &Path, content: impl AsRef<str>)  -> Result<()> {
 
 
 /// Get the content of a file with good error handling
+#[allow(dead_code)]
 pub fn read_file(path: &Path) -> Result<String> {
     let mut content = String::new(); 
     File::open(path)
@@ -77,6 +78,7 @@ pub fn read_file(path: &Path) -> Result<String> {
 
 
 /// Copy a file to another location
+#[allow(dead_code)]
 pub fn copy_file(src: &Path, dest: &Path, base_path: &Path)-> Result<()> {
     let relative_path = src.strip_prefix(base_path).unwrap();
     let target_path = dest.join(relative_path);
@@ -88,6 +90,7 @@ pub fn copy_file(src: &Path, dest: &Path, base_path: &Path)-> Result<()> {
 
 
 /// Copy a directory to another location
+#[allow(dead_code)]
 pub fn copy_directory(src: &Path, dest: &Path) -> Result<()>{
     for entry in WalkDir::new(src).follow_links(true).into_iter().filter_map(std::result::Result::ok) {
         let relative_path = entry.path().strip_prefix(src).unwrap(); 
@@ -158,7 +161,7 @@ pub fn generate_site(
 /// If `output_dir` is given and exists, it will be removed unless `force` is `false`.
 /// If `base_url` is given, it will be used to set the base URL of the site.
 /// TODO
-pub fn build_output_dir(root_dir: &Path, config_file: &Path, output_dir: Option<&Path>, force: bool) -> Result<()>{
+pub fn build_output_dir(root_dir: &Path, config_file: &Path, base_url: Option<&str>, output_dir: Option<&Path>, force: bool) -> Result<()>{
     let mut site = Site::new(root_dir, config_file)?;
     if let Some(output_dir) = output_dir {
         if !force && output_dir.exists() {
@@ -170,6 +173,9 @@ pub fn build_output_dir(root_dir: &Path, config_file: &Path, output_dir: Option<
     }
 
     // Load all content files before building the output directory
+    if let Some(b) = base_url {
+        site.set_base_url(b.to_string());
+    }
     site.load_files()?;
     
     // Build the output directory and return the result

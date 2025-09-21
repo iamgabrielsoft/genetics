@@ -12,6 +12,7 @@ mod utils;
 
 
 /// Read a line from stdin
+#[allow(dead_code)]
 fn read_line() -> Result<String, String> {
     let stdin = io::stdin().lock().lines(); 
     let mut lines = stdin;
@@ -22,6 +23,7 @@ fn read_line() -> Result<String, String> {
 }
 
 /// Ask a yes/no question
+#[allow(dead_code)]
 fn ask_bool(question: &str, default: bool) -> Result<bool, String> {
     let _ = io::stdout().flush();
     let input = read_line()?;
@@ -84,7 +86,9 @@ fn create_new_project(name: &str, force: bool) -> Result<(), String> {
         .trim_start()
         .replace("%BASE_URL%", &base_url);
 
-    populate_project(path, &config);
+    if let Err(e) = populate_project(path, &config) {
+        return Err(format!("Failed to populate project: {}", e));
+    }
 
     println!();
 
@@ -110,7 +114,7 @@ fn populate_project(path: &Path, config: &str) -> Result<()>{
 
 fn main() {
     let cli = <Cli as clap::Parser>::parse();
-    let current_dir = cli.root.canonicalize().unwrap_or_else(|e| {
+    let current_dir = cli.root.canonicalize().unwrap_or_else(|_| {
         std::process::exit(1); 
     });
 
@@ -122,12 +126,12 @@ fn main() {
             }
         }
 
-        Command::Build { base_url, output_dir } => {
+        Command::Build {base_url, output_dir } => {
             println!("\x1B[1;34m   \x1B[0m Building starting...");
             let start = Instant::now(); 
             let (root_dir, config_file) = get_current_config_path(&cli.root, &cli.config);
 
-            match build_output_dir(&root_dir, &config_file, output_dir.as_deref(), false) {
+            match build_output_dir(&root_dir, &config_file, base_url.as_deref(), output_dir.as_deref(), false) {
                 Ok(()) => println!("\x1B[1;32m   \x1B[0m Built successfully in {:?}", start.elapsed()),
                 Err(e) => {
                     println!("Unable to build output directory: {}", &e);
@@ -166,7 +170,7 @@ fn main() {
                 false,
                 base_url.as_deref(),
                 &config_file,
-                false,
+                open,
                 false,
             ) {
                 println!("Unable to serve site: {}", &err);

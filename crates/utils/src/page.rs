@@ -27,7 +27,7 @@ pub struct Page {
 
 impl Page {
     /// Create a new page from a file
-    pub fn new<P: AsRef<Path>>(file_path: P, base_path: &Path) -> Page{
+    pub fn new<P: AsRef<Path>>(file_path: P, _base_path: &Path) -> Page{
         let file_path = file_path.as_ref(); 
 
         Page {
@@ -66,7 +66,7 @@ impl Page {
         // config: &Config,
         base_path: &Path,
     ) -> Result<Page> {
-        let (front_matter, content) = Self::split_page_content(file_path, content)?;
+        let (_front_matter, content) = Self::split_page_content(file_path, content)?;
         let mut page = Self::new(file_path, base_path); 
 
         page.content = content.to_string(); 
@@ -76,7 +76,7 @@ impl Page {
     }
 
     /// Read .md files
-    pub fn parse_file<P: AsRef<Path>>(file_path: P, config: &Config, base_path: &Path) -> Result<Page> {
+    pub fn parse_file<P: AsRef<Path>>(file_path: P, _config: &Config, base_path: &Path) -> Result<Page> {
         let path = file_path.as_ref(); 
         let content = read_file(path)?; 
         let page = Self::parse(path, &content, base_path)?; 

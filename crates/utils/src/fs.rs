@@ -22,7 +22,7 @@ pub fn get_current_config_path(dir: &Path, config_path: &Path) -> (PathBuf, Path
     });
 
     let config_file_uncontaminated = root_dir.join(config_path);
-    let config_file = config_file_uncontaminated.canonicalize().unwrap_or_else(|e|{
+    let config_file = config_file_uncontaminated.canonicalize().unwrap_or_else(|_|{
         println!("Unable to canonicalize config file {}", config_file_uncontaminated.display());
         std::process::exit(1);
     });

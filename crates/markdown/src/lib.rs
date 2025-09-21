@@ -1,7 +1,9 @@
 pub mod context;
 pub mod markdown;
 pub mod codeblock;
+pub mod fence;
 
+pub use codeblock::SyntaxHighlighter;
 pub use context::RenderContext;
 pub use markdown::{markdown_to_html, Rendered};
 
