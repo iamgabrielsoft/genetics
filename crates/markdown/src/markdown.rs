@@ -251,11 +251,13 @@ pub fn markdown_to_html(content: &str, context: &RenderContext) -> Result<Render
                         }
                     }
                 }
-                Event::Start(Tag::CodeBlock(ref kind)) => {
+                Event::Start(Tag::CodeBlock(kind)) => {
                     // Store the code block info for when we process the text content
                     // The actual processing will happen when we encounter the End(Tag::CodeBlock)
                     let fence = match kind {
-                        cmark::CodeBlockKind::Fenced(fence_info) => FenceSettings::new(fence_info), 
+                        cmark::CodeBlockKind::Fenced(fence_info) => {
+                            FenceSettings::new(fence_info)
+                        },
                         _ => FenceSettings::new(""),
                     }; 
 
@@ -444,6 +446,8 @@ mod tests {
             markdown: config::markup::Markdown {
                 highlight_code: true,
                 render_emoji: true,
+                highlight_theme: config::config_highlight::SyntaxTheme::default(),
+                extra_theme_set: config::config_highlight::ExtraThemeSet::default(),
             },
         });
         

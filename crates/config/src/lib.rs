@@ -2,6 +2,7 @@
 
 
 pub mod markup;
+pub mod config_highlight;
 
 use serde::{Deserialize, Serialize};
 

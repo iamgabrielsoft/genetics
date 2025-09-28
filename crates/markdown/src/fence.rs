@@ -8,6 +8,7 @@ pub struct FenceSettings<'a> {
     pub highlight_lines: Vec<RangeInclusive<usize>>,
     pub line_number_start: usize, 
     pub line_numbers: bool,
+    pub language: Option<&'a str>,
 }
 
 #[derive(Debug)]
@@ -26,6 +27,9 @@ pub enum FenceToken<'a> {
 
     /// Name of the fence
     Name(&'a str),
+
+    /// Language of the fence
+    Language(&'a str),
 }
 
 struct FenceIter<'a> {
@@ -80,6 +84,7 @@ impl<'a> FenceSettings<'a> {
             highlight_lines: Vec::new(),
             line_number_start: 1,
             line_numbers: false,
+            language: None,
         };
 
 
@@ -90,6 +95,7 @@ impl<'a> FenceSettings<'a> {
                 FenceToken::HideLines(lines) => init.hide_lines = lines, 
                 FenceToken::HighlightLine(lines) => init.highlight_lines = lines, 
                 FenceToken::Name(name) => init.name = Some(name), 
+                FenceToken::Language(lang) => init.language = Some(lang), 
             }
         }
 
@@ -132,10 +138,14 @@ impl<'a> Iterator for FenceIter<'a>{
                     return Some(FenceToken::EnableLineNumbers);
                 },
 
-                _ => {
-                    return None;
-                }
-                
+                lang => {
+                    if token_split.next().is_some() {
+                        eprintln!("Invalid fence token: {}", token);
+                        continue; 
+                    }
+
+                    return Some(FenceToken::Language(lang));
+                },                
             }
         }
     }

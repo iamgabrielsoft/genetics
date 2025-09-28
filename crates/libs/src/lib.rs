@@ -15,3 +15,5 @@ pub use ws;
 pub use tera;
 pub use gh_emoji;
 pub use syntect;
+pub use once_cell;
+

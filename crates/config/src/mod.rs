@@ -47,7 +47,7 @@ impl Config {
         
     } 
     /// Serializes the config
-    pub fn serizlie(&self) -> SerializedConfig<'_> {
+    pub fn serialize(&self) -> SerializedConfig<'_> {
         SerializedConfig {
             base_url: &self.base_ul,
             title: self.title.as_deref(),

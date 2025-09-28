@@ -1,24 +1,11 @@
 use std::ops::RangeInclusive;
+use config::config_highlight::fix_highlighting;
 use libs::syntect::util::LinesWithEndings;
 use config::Config;
 use errors::Result;
 
 use crate::fence::FenceSettings;
-
-/// A basic syntax highlighter
-#[derive(Debug)]
-pub struct SyntaxHighlighter<'a> {
-    _phantom: std::marker::PhantomData<&'a ()>,
-}
-
-impl<'a> SyntaxHighlighter<'a> {
-    /// Creates a new SyntaxHighlighter instance
-    pub fn new() -> Self {
-        Self {
-            _phantom: std::marker::PhantomData,
-        }
-    }
-}
+use crate::highlight::SyntaxHighlighter;
 
 /// Code block struct
 pub struct CodeBlock<'config> {
@@ -35,10 +22,15 @@ impl<'config> CodeBlock<'config>{
         fence: FenceSettings<'fence_info>,
         _config: &'config Config,
         _path: Option<&'config str>,
-    ) -> Result<(Self, String)> {
+    ) -> Result<(Self, String)> 
+    where 
+        'fence_info: 'config,
+    {
+        let syntax_theme = fix_highlighting(fence.language, _config);
+        let highlighter = SyntaxHighlighter::new(_config.markdown.highlight_code, syntax_theme);
         Ok((
             Self {
-                _highlighter: SyntaxHighlighter::new(),
+                _highlighter: highlighter,
                 line_numbers: fence.line_numbers,
                 _line_number_start: fence.line_number_start,
                 _highlight_lines: fence.highlight_lines,
