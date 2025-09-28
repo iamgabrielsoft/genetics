@@ -7,9 +7,8 @@ use errors::Result;
 use crate::fence::FenceSettings;
 use crate::highlight::SyntaxHighlighter;
 
-/// Code block struct
-pub struct CodeBlock<'config> {
-    _highlighter: SyntaxHighlighter<'config>,
+pub struct CodeBlock {
+    _highlighter: SyntaxHighlighter,
     line_numbers: bool,
     _line_number_start: usize,
     _highlight_lines: Vec<RangeInclusive<usize>>,
@@ -17,16 +16,14 @@ pub struct CodeBlock<'config> {
 }
 
 
-impl<'config> CodeBlock<'config>{
-    pub fn new<'fence_info>(
-        fence: FenceSettings<'fence_info>,
-        _config: &'config Config,
-        _path: Option<&'config str>,
+impl CodeBlock {
+    pub fn new(
+        fence: FenceSettings,
+        _config: &Config,
+        _path: Option<&str>,
     ) -> Result<(Self, String)> 
-    where 
-        'fence_info: 'config,
     {
-        let syntax_theme = fix_highlighting(fence.language, _config);
+        let syntax_theme = fix_highlighting(fence.language.as_deref(), _config);
         let highlighter = SyntaxHighlighter::new(_config.markdown.highlight_code, syntax_theme);
         Ok((
             Self {
@@ -42,7 +39,6 @@ impl<'config> CodeBlock<'config>{
 
     pub fn highlight(&mut self, content: &str) -> String {
         let mut buffer = String::new(); 
-       // let mark_style = self.high
 
        if self.line_numbers {
         buffer.push_str("<table><tbody>");

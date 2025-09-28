@@ -23,12 +23,12 @@ pub struct SyntaxTheme<'config> {
 }
 
 
-pub fn fix_highlighting<'config>(language: Option<&'config str>, config: &'config Config) -> SyntaxTheme<'config> {
+pub fn fix_highlighting<'config>(language: Option<&str>, config: &'config Config) -> SyntaxTheme<'config> {
     // We need to get the configured theme
     let theme = config.markdown.get_highlight_theme();
     
-    if let Some(ref lang) = language {
-        let capture_js= if *lang == "js" || *lang == "javascript" {
+    if let Some(lang) = language {
+        let capture_js= if lang == "js" || lang == "javascript" {
             "ts"
         }
         else { lang };

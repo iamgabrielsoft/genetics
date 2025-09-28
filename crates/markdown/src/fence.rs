@@ -1,14 +1,14 @@
 use std::ops::RangeInclusive;
 
 
-#[derive(Debug)]
-pub struct FenceSettings<'a> {
-    pub name: Option<&'a str>,
+#[derive(Debug, Clone)]
+pub struct FenceSettings {
+    pub name: Option<String>,
     pub hide_lines: Vec<RangeInclusive<usize>>,
     pub highlight_lines: Vec<RangeInclusive<usize>>,
     pub line_number_start: usize, 
     pub line_numbers: bool,
-    pub language: Option<&'a str>,
+    pub language: Option<String>,
 }
 
 #[derive(Debug)]
@@ -76,8 +76,8 @@ impl<'a> FenceIter<'a> {
     }
 }
 
-impl<'a> FenceSettings<'a> {
-    pub fn new(fence_info: &'a str) -> Self {
+impl FenceSettings {
+    pub fn new(fence_info: &str) -> Self {
         let mut init = Self  {
             name: None,
             hide_lines: Vec::new(),
@@ -94,8 +94,13 @@ impl<'a> FenceSettings<'a> {
                 FenceToken::InitialNumber(num) => init.line_number_start = num, 
                 FenceToken::HideLines(lines) => init.hide_lines = lines, 
                 FenceToken::HighlightLine(lines) => init.highlight_lines = lines, 
-                FenceToken::Name(name) => init.name = Some(name), 
-                FenceToken::Language(lang) => init.language = Some(lang), 
+                FenceToken::Name(name) => {
+                    init.name = Some(name.to_string());
+                    init.language = Some(name.to_string());
+                },
+                FenceToken::Language(lang) => {
+                    init.language = Some(lang.to_string());
+                }
             }
         }
 

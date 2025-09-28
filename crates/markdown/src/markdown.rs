@@ -251,15 +251,13 @@ pub fn markdown_to_html(content: &str, context: &RenderContext) -> Result<Render
                         }
                     }
                 }
-                Event::Start(Tag::CodeBlock(kind)) => {
+                Event::Start(Tag::CodeBlock(ref kind)) => {
                     // Store the code block info for when we process the text content
                     // The actual processing will happen when we encounter the End(Tag::CodeBlock)
                     let fence = match kind {
-                        cmark::CodeBlockKind::Fenced(fence_info) => {
-                            FenceSettings::new(fence_info)
-                        },
+                        cmark::CodeBlockKind::Fenced(fence_info) => FenceSettings::new(fence_info),
                         _ => FenceSettings::new(""),
-                    }; 
+                    };
 
                     let (block, begin) = match CodeBlock::new(fence, context.config, path) {
                         Ok(cb) => cb,
