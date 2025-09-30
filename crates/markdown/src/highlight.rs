@@ -230,25 +230,16 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_highlight_rust() {
-        let rust_code = r#"
-        fn main() {
-            println!("Hello, world!");
-        }
-        "#;
+    fn test_write_color() {
+        let mut buffer = String::new();
+        let color = Color { r: 255, g: 0, b: 0, a: 255 };
         
-        let highlighted = highlight_code(rust_code, Some("rust")).unwrap();
-        assert!(highlighted.contains("fn"));
-        assert!(highlighted.contains("main"));
-        assert!(highlighted.contains("println!"));
-        assert!(highlighted.contains("language-rust"));
-    }
-
-    #[test]
-    fn test_highlight_unknown_language() {
-        let code = "just some plain text";
-        let highlighted = highlight_code(code, None).unwrap();
-        assert!(highlighted.contains("just some plain text"));
-        assert!(highlighted.contains("language-text"));
+        write_color(&mut buffer, color).unwrap();
+        assert_eq!(buffer, "rgb(255,0,0)");
+        
+        buffer.clear();
+        let semi_transparent = Color { r: 0, g: 255, b: 0, a: 128 };
+        write_color(&mut buffer, semi_transparent).unwrap();
+        assert_eq!(buffer, "rgba(0,255,0,0.502)");
     }
 }

@@ -1,8 +1,15 @@
 use libs::once_cell::sync::Lazy;
 use libs::syntect::parsing::{SyntaxReference, SyntaxSet};
 use libs::syntect::highlighting::{Theme, ThemeSet};
+use std::collections::HashMap;
 
 use crate::Config;
+
+/// A set of additional themes that can be used for syntax highlighting
+#[derive(Default, Debug, Clone)]
+pub struct ExtraThemeSet {
+    pub themes: HashMap<String, Theme>,
+}
 
 pub static SYNTAX_SET: Lazy<SyntaxSet> = Lazy::new(SyntaxSet::load_defaults_newlines);
 pub static THEME_SET: Lazy<ThemeSet> = Lazy::new(ThemeSet::load_defaults);
@@ -20,6 +27,21 @@ pub struct SyntaxTheme<'config> {
     pub theme: Option<&'config Theme>,
     pub style: HighlightStyle,
     pub syntax_set: &'config SyntaxSet,
+}
+
+impl<'config> Default for SyntaxTheme<'config> {
+    fn default() -> Self {
+        // Use the default syntax set and plain text syntax as fallback
+        let syntax_set = &SYNTAX_SET;
+        let syntax = syntax_set.find_syntax_plain_text();
+        
+        Self {
+            syntax,
+            theme: None,
+            style: HighlightStyle::None,
+            syntax_set,
+        }
+    }
 }
 
 

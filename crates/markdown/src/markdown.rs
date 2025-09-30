@@ -444,8 +444,8 @@ mod tests {
             markdown: config::markup::Markdown {
                 highlight_code: true,
                 render_emoji: true,
-                highlight_theme: config::config_highlight::SyntaxTheme::default(),
-                extra_theme_set: config::config_highlight::ExtraThemeSet::default(),
+                highlight_theme: "base16-ocean-dark".to_string(),
+                extra_theme_set: std::sync::Arc::new(None),
             },
         });
         
